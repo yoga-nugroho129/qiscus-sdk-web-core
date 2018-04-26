@@ -846,7 +846,7 @@ class QiscusSDK extends EventEmitter {
     var pendingComment = self.prepareCommentToBeSubmitted(commentData);
 
     // push this comment unto active room
-    if (type == "reply") {
+    if (type == "reply" && self.selected != null) {
       // change payload for pendingComment
       // get the comment for current replied id
       var parsedPayload = JSON.parse(payload)
@@ -857,7 +857,10 @@ class QiscusSDK extends EventEmitter {
       parsedPayload.replied_comment_sender_username = replied_message.username_as
       pendingComment.payload = parsedPayload
     }
-    self.selected.comments.push(pendingComment);
+
+    if(self.selected != null) {
+      self.selected.comments.push(pendingComment);      
+    }
 
     const extrasToBeSubmitted = extras || self.extras;
     return this.userAdapter
@@ -877,17 +880,19 @@ class QiscusSDK extends EventEmitter {
           pendingComment.id = res.id;
           pendingComment.before_id = res.comment_before_id;
 
-          const commentBeforeThis = self.selected.comments.find(
-            cmt => cmt.id == res.comment_before_id
-          );
-          if (!commentBeforeThis && res.room_id == self.selected.id) {
-            this.logging("comment before id not found! ", res.comment_before_id);
+          if (self.selected != null) {
+            const commentBeforeThis = self.selected.comments.find(
+              cmt => cmt.id == res.comment_before_id
+            );
+            if (!commentBeforeThis && res.room_id == self.selected.id) {
+              this.logging("comment before id not found! ", res.comment_before_id);
 
-            // need to fix, these method does not work
-            // self.synchronize(roomLastCommentId);
-            // self.synchronizeEvent(roomLastCommentId);
+              // need to fix, these method does not work
+              // self.synchronize(roomLastCommentId);
+              // self.synchronizeEvent(roomLastCommentId);
 
-            this.chatGroup(res.room_id);
+              this.chatGroup(res.room_id);
+            }            
           }
 
           return new Promise((resolve, reject) => resolve(res));
