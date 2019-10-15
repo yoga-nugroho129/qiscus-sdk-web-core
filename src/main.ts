@@ -7,6 +7,7 @@ import getMessageAdapter, {
   QMessage
 } from "./adapters/message";
 import getRealtimeAdapter, { IQRealtimeAdapter } from "./adapters/realtime";
+import { Hooks, hookAdapterFactory } from "./hooks";
 import getRoomAdapter from "./adapters/room";
 import getUserAdapter from "./adapters/user";
 import {
@@ -72,6 +73,7 @@ export default class Qiscus implements IQiscus {
   private readonly _appId: Atom<string> = atom(null);
   private readonly _shouldSync = atom(false);
   private readonly _customHeaders = atom<{ [key: string]: string }>(null);
+  private readonly _hookAdapter = hookAdapterFactory();
   //</editor-fold>
 
   public static get instance(): Qiscus {
@@ -746,8 +748,35 @@ export default class Qiscus implements IQiscus {
           m.status = IQMessageStatus.Sending;
         })
       )
-      .map(([roomId, message]) =>
-        xs.fromPromise(this.messageAdapter.sendMessage(roomId, message))
+      .map(([roomId, message]) => {
+        const msg = QMessage.prepareNew(
+          this.currentUser.userId,
+          roomId,
+          message.message,
+          getMessageType(message.type),
+          message.extras,
+          message.payload
+        );
+        return xs.fromPromise(
+          this._hookAdapter.triggerFor(Hooks.MESSAGE_BEFORE_SENT, msg)
+        );
+      })
+      .flatten()
+      .map(message =>
+        xs.fromPromise(
+          this.messageAdapter.sendMessage(message.roomId, {
+            message: message.content,
+            extras: message.extras,
+            payload: message.payload,
+            type: message.type
+          })
+        )
+      )
+      .flatten()
+      .map(message =>
+        xs.fromPromise(
+          this._hookAdapter.triggerFor(Hooks.MESSAGE_AFTER_SENT, message)
+        )
       )
       .flatten()
       .compose(toCallbackOrPromise(callback));
@@ -1063,5 +1092,10 @@ export default class Qiscus implements IQiscus {
           this.realtimeAdapter.mqtt.unsubscribeUserPresence(userId)
         )
       );
+  }
+
+  static Hooks = Hooks;
+  get onHooks() {
+    return this._hookAdapter.onHooks;
   }
 }

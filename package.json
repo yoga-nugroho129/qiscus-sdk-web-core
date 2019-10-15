@@ -12,7 +12,7 @@
     "build": "npm-run-all --parallel build:web:prod build:web:dev",
     "build:web:prod": "webpack --env.production --env.target=web",
     "build:web:dev": "webpack --env.development --env.target=web",
-    "build:web:watch": "webpack --env.development --env.target=web",
+    "build:web:watch": "webpack --env.development --env.target=web --watch",
     "clean": "rimraf dist lib",
     "preversion": "npm-run-all clean build",
     "prepublishOnly": "npm-run-all clean build",

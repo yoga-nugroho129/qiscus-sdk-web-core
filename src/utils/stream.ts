@@ -1,5 +1,5 @@
-import xs, { Stream, Subscription } from 'xstream';
-import { Subscription as Subs } from '../defs';
+import xs, { Stream, Subscription } from "xstream";
+import { Subscription as Subs } from "../defs";
 
 type Callback<T> = (value: T, error?: Error | null) => void;
 export const toPromise = <T>(stream: Stream<T>): Promise<T> =>
@@ -98,6 +98,7 @@ export const tap = <T>(
 
 const sleep = (time: number) =>
   new Promise(resolve => setTimeout(resolve, time));
+
 export const bufferUntil = <T>(fn: () => boolean) => (
   stream: Stream<T>
 ): Stream<T> => {

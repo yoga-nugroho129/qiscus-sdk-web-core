@@ -67,6 +67,7 @@ export class QMessage implements IQMessage {
     this.payload = json.payload;
     if (json.type === "text") this.type = IQMessageType.Text;
     if (json.type === "custom") this.type = IQMessageType.Custom;
+    if (json.status === "sent") this.status = IQMessageStatus.Delivered;
     if (json.status === "delivered") this.status = IQMessageStatus.Delivered;
     if (json.status === "read") this.status = IQMessageStatus.Read;
     return this;
@@ -126,7 +127,14 @@ export default function getMessageAdapter(
     },
     sendMessage(roomId: number, messageT: IQMessageT): Promise<IQMessage> {
       const userId = user.get().currentUser.get().userId;
-      const message = QMessage.prepareNew(userId, roomId, messageT.message);
+      const message = QMessage.prepareNew(
+        userId,
+        roomId,
+        messageT.message,
+        getMessageType(messageT.type),
+        messageT.extras,
+        messageT.payload
+      );
       messages.update(messages => ({
         ...messages,
         [message.uniqueId]: message
