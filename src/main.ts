@@ -7,7 +7,7 @@ import getMessageAdapter, {
   QMessage
 } from "./adapters/message";
 import getRealtimeAdapter, { IQRealtimeAdapter } from "./adapters/realtime";
-import { Hooks, hookAdapterFactory } from "./hooks";
+import { Hooks, hookAdapterFactory } from "./adapters/hooks";
 import getRoomAdapter from "./adapters/room";
 import getUserAdapter from "./adapters/user";
 import {
@@ -56,7 +56,7 @@ export type QSyncMode = "socket" | "http" | "both";
 export default class Qiscus implements IQiscus {
   private static _instance: Qiscus = null;
 
-  //<editor-fold desc="Property">
+  // region Property"
   private readonly _syncMode: Atom<QSyncMode> = atom("socket");
 
   private readonly _realtimeAdapter: Atom<IQRealtimeAdapter | null> = atom(
@@ -74,7 +74,7 @@ export default class Qiscus implements IQiscus {
   private readonly _shouldSync = atom(false);
   private readonly _customHeaders = atom<{ [key: string]: string }>(null);
   private readonly _hookAdapter = hookAdapterFactory();
-  //</editor-fold>
+  // endregion
 
   public static get instance(): Qiscus {
     if (this._instance == null) this._instance = new this();
