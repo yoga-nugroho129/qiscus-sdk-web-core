@@ -16,6 +16,7 @@ import { GroupChatBuilder } from './lib/utils'
 import { tryCatch } from './lib/util'
 import Package from '../package.json'
 import { Hooks, hookAdapterFactory } from './lib/adapters/hook'
+let setBackToOnline
 
 /**
  * Qiscus Web SDK Core Class
@@ -44,6 +45,10 @@ class QiscusSDK {
     this.uploadURL = `${this.baseURL}/api/v2/sdk/upload`
     this.mqttURL = 'wss://mqtt.qiscus.com:1886/mqtt'
     this.brokerLbUrl = 'https://realtime.qiscus.com'
+    this.syncOnConnect = 3000
+    this.enableEventReport = false
+    this.enableRealtime = true
+    this.enableRealtimeCheck = true
     this.HTTPAdapter = null
     this.realtimeAdapter = null
     this.customEventAdapter = null
@@ -91,7 +96,6 @@ class QiscusSDK {
     // set AppID
     if (!config.AppId) throw new Error('Please provide valid AppId')
     this.AppId = config.AppId
-
     // We need to disable realtime load balancing if user are using custom server
     // and did not provide a brokerLbUrl
     const isDifferentBaseUrl =
@@ -133,7 +137,6 @@ class QiscusSDK {
     if (config.templateFunction) {
       this.templateFunction = config.templateFunction
     }
-
     if (config.syncInterval != null) this.syncInterval = config.syncInterval
     this._customHeader = {}
 
@@ -189,7 +192,6 @@ class QiscusSDK {
         room_id: data.roomId
       })
     )
-
     this.syncAdapter = SyncAdapter(() => this.HTTPAdapter, {
       getToken: () => this.userData.token,
       interval: this.syncInterval,
@@ -246,11 +248,31 @@ class QiscusSDK {
         this.events.emit('room-cleared', room)
       })
     })
-
     this.customEventAdapter = CustomEventAdapter(
       this.realtimeAdapter,
       this.user_id
     )
+
+    // set appConfig
+    this.HTTPAdapter = new HttpAdapter({
+      baseURL: this.baseURL,
+      AppId: this.AppId,
+      userId: this.user_id,
+      version: this.version,
+      getCustomHeader: () => this._customHeader
+    })
+    this.HTTPAdapter.get_request('api/v2/sdk/config').then((resp) => {
+      // console.log(resp)
+      this.baseURL = resp.body.results.base_url
+      this.brokerLbUrl = resp.body.results.broker_lb_url
+      this.mqttURL = resp.body.results.broker_url
+      this.enableEventReport = resp.body.results.enable_event_report,
+      this.enableRealtime = resp.body.results.enable_realtime,
+      this.enableRealtimeCheck = resp.body.results.enable_realtime_check,
+      this.syncInterval = resp.body.results.sync_interval,
+      this.extras = resp.body.results.extras,
+      this.syncOnConnect = resp.body.results.sync_on_connect
+    })
   }
 
   _setRead(messageId, messageUniqueId, userId) {
@@ -443,12 +465,13 @@ class QiscusSDK {
       this.roomAdapter = new RoomAdapter(this.HTTPAdapter)
 
       this.realtimeAdapter.subscribeUserChannel()
-      if (this.presensePublisherId != null && this.presensePublisherId !== -1) {
-        clearInterval(this.presensePublisherId)
+      if (this.presencePublisherId != null && this.presencePublisherId !== -1) {
+        clearInterval(this.presencePublisherId)
       }
-      this.presensePublisherId = // ================================ ==> EDITED from setInterval 3500
-        (setTimeout(() => this.realtimeAdapter.publishPresence(this.user_id, true)), // ========> ==> EDITED add true param
-        0)
+
+      this.presencePublisherId = setInterval(() => {
+        this.realtimeAdapter.publishPresence(this.user_id, true)
+      }, 3500)
 
       // if (this.sync === "http" || this.sync === "both") this.activateSync();
       if (this.options.loginSuccessCallback) {
@@ -695,11 +718,31 @@ class QiscusSDK {
     this.events.emit('login-success', data)
   }
 
-  publishOnlinePresence(val) { // ==================================== ==> EDITED added function
-    this.realtimeAdapter.publishPresence(this.user_id, val)
+  publishOnlinePresence(val) {
+    if (val === true) {
+      setBackToOnline = setInterval(() => {
+        this.realtimeAdapter.publishPresence(this.user_id, true)
+      }, 3500)
+    } else {
+      clearInterval(this.presencePublisherId)
+      clearInterval(setBackToOnline)
+      setTimeout(() => {
+        this.realtimeAdapter.publishPresence(this.user_id, false)
+      }, 3500)
+    }
+  }
+
+  subscribeUserPresence(userId) {
+    this.realtimeAdapter.subscribeUserPresence(userId)
+  }
+
+  unsubscribeUserPresence(userId) {
+    this.realtimeAdapter.unsubscribeUserPresence(userId)
   }
 
   logout() {
+    this.publishOnlinePresence(false)
+    clearInterval(this.presencePublisherId)
     this.selected = null
     this.isInit = false
     this.isLogin = false
@@ -1039,14 +1082,14 @@ class QiscusSDK {
   }
 
   updateProfile(user) {
-    return this.userAdapter
-      .updateProfile(user)
-      .then((res) => {
+    return this.userAdapter.updateProfile(user).then(
+      (res) => {
         this.events.emit('profile-updated', user)
         this.userData = res
         return Promise.resolve(res)
-      },(err) => console.log(err))
-      // .then(resp => this.userData = resp)
+      },
+      (err) => console.log(err)
+    )
   }
 
   getNonce() {
@@ -1118,7 +1161,7 @@ class QiscusSDK {
       username_as: this.username,
       username_real: this.user_id,
       user_avatar_url: this.userData.avatar_url,
-      user_extras: this.userData.user_extras, // ============================= ==> EDITED
+      user_extras: this.userData.user_extras,
       id: Math.round(Math.random() * 10e6),
       type: type || 'text',
       timestamp: format(new Date()),
